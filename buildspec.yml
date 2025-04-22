@@ -10,7 +10,6 @@ phases:
     commands:
       - echo Logging in to Amazon ECR...
       - aws --version
-      - echo Authenticating with ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - echo "IMAGE_TAG=$IMAGE_TAG"
@@ -35,25 +34,8 @@ phases:
       - kubectl apply -f k8s/service.yaml
       - echo Checking for LoadBalancer External IP...
       - kubectl get svc webserver-service
-      - |
-        WAIT_SECONDS=0
-        MAX_WAIT_SECONDS=300
-        echo "Waiting for LoadBalancer to get external IP (timeout: ${MAX_WAIT_SECONDS}s)..."
-        while [ $WAIT_SECONDS -lt $MAX_WAIT_SECONDS ]; do
-          EXTERNAL_IP=$(kubectl get svc webserver-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-          if [ -n "$EXTERNAL_IP" ]; then
-            echo "✅ Application is available at: http://$EXTERNAL_IP"
-            echo "{\"loadBalancerUrl\":\"http://$EXTERNAL_IP\"}" > loadbalancer-url.json
-            break
-          fi
-          echo "⏳ Still waiting for external IP... (${WAIT_SECONDS}/${MAX_WAIT_SECONDS}s)"
-          sleep 10
-          WAIT_SECONDS=$((WAIT_SECONDS + 10))
-        done
-        if [ -z "$EXTERNAL_IP" ]; then
-          echo "❌ Timed out waiting for LoadBalancer external IP"
-          exit 1
-        fi
+      - chmod +x ./wait-for-lb.sh
+      - ./wait-for-lb.sh
 artifacts:
   files:
     - imagedefinitions.json
