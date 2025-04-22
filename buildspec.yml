@@ -27,15 +27,16 @@ phases:
       - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
       - echo Replacing image URI in deployment.yaml...
       - sed "s|<image>|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g" k8s/deployment.yaml > k8s/rendered-deployment.yaml
-      - echo Rendered Deployment YAML:
       - cat k8s/rendered-deployment.yaml
-      - echo Applying Kubernetes manifests...
       - kubectl apply -f k8s/rendered-deployment.yaml
       - kubectl apply -f k8s/service.yaml
-      - echo Checking for LoadBalancer External IP...
+      - echo "Checking for LoadBalancer External IP..."
       - kubectl get svc webserver-service
-      - chmod +x ./wait-for-lb.sh
-      - ./wait-for-lb.sh
+      - echo "Waiting for LoadBalancer to get external IP..."
+      - sleep 30
+      - EXTERNAL_IP=$(kubectl get svc webserver-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+      - echo "Application URL: http://$EXTERNAL_IP"
+      - echo "{\"loadBalancerUrl\":\"http://$EXTERNAL_IP\"}" > loadbalancer-url.json
 artifacts:
   files:
     - imagedefinitions.json
