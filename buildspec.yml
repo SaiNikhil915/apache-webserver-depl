@@ -26,35 +26,34 @@ phases:
       - docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
 
   post_build:
-  commands:
-    - echo Updating kubeconfig for EKS...
-    - export HOME=/root
-    - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
+    commands:
+      - echo Updating kubeconfig for EKS...
+      - export HOME=/root
+      - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
 
-    - echo Verifying files...
-    - ls -R
+      - echo Verifying files...
+      - ls -R
 
-    - echo Replacing image URI in deployment.yaml...
-    - sed "s|<image>|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g" k8s/deployment.yaml > k8s/rendered-deployment.yaml || { echo "❌ SED failed"; exit 1; }
+      - echo Replacing image URI in deployment.yaml...
+      - sed "s|<image>|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g" k8s/deployment.yaml > k8s/rendered-deployment.yaml || { echo "❌ SED failed"; exit 1; }
 
-    - echo --- Rendered Deployment YAML ---
-    - cat k8s/rendered-deployment.yaml || echo "❌ File not found: rendered-deployment.yaml"
+      - echo --- Rendered Deployment YAML ---
+      - cat k8s/rendered-deployment.yaml || echo "❌ File not found: rendered-deployment.yaml"
 
-    - echo Applying Kubernetes manifests...
-    - kubectl apply -f k8s/rendered-deployment.yaml
-    - kubectl apply -f k8s/service.yaml
+      - echo Applying Kubernetes manifests...
+      - kubectl apply -f k8s/rendered-deployment.yaml
+      - kubectl apply -f k8s/service.yaml
 
-    - echo Checking for LoadBalancer External IP...
-    - for i in {1..30}; do
-    - EXTERNAL_IP=$(kubectl get svc webserver-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-    - if [[ -n "$EXTERNAL_IP" ]]; then
-    - echo "✅ App is available at: http://$EXTERNAL_IP"
-    - break
-    - fi
-    - echo "⏳ Waiting for external IP... ($i/30)"
-    - sleep 10
-    - done
-
+      - echo Checking for LoadBalancer External IP...
+      - for i in {1..30}; do
+      - EXTERNAL_IP=$(kubectl get svc webserver-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+      - if [[ -n "$EXTERNAL_IP" ]]; then
+      - echo "✅ App is available at: http://$EXTERNAL_IP"
+      - break
+      - fi
+      - echo "⏳ Waiting for external IP... ($i/30)"
+      - sleep 10
+      - done
 
 artifacts:
   files:
