@@ -1,55 +1,26 @@
 version: 0.2
 
-env:
-  variables:
-    EKS_CLUSTER_NAME: sample-webserver-eks-cluster
-    ECR_REGISTRY:   746413500084.dkr.ecr.us-east-1.amazonaws.com
-    REPO_NAME:      sample-webserver-repo
-    AWS_DEFAULT_REGION: us-east-1
-
 phases:
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
-      - aws ecr get-login-password --region $AWS_DEFAULT_REGION \
-          | docker login --username AWS --password-stdin $ECR_REGISTRY
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+      - echo Logging in to Docker Hub...
+      - docker login --username <your_dockerhub_username> --password <your_dockerhub_password>
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
-      - echo "Using image tag: $IMAGE_TAG"
-
+      - export IMAGE_TAG
   build:
     commands:
       - echo Building Docker image...
       - docker build -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG .
-      - echo Pushing Docker image...
-      - docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
-
   post_build:
     commands:
-      - echo Updating kubeconfig for EKS...
-      - export HOME=/root
+      - echo Writing imagedefinitions.json for CodeDeploy...
+      - printf '[{"name":"f2p-backend","imageUri":"%s"}]' $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG > imagedefinitions.json
+      - echo Updating kubeconfig for EKS cluster...
       - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
-
-      - echo Replacing image URI in deployment.yaml...
-      - sed "s|IMAGE_URI|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g" \
-            k8s/deployment.yaml > k8s/rendered-deployment.yaml
-
-      - echo Applying Kubernetes manifests...
+      - echo Rendering and previewing deployment.yaml...
+      - sed "s|IMAGE_URI|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g" k8s/deployment.yaml > k8s/rendered-deployment.yaml
+      - cat k8s/rendered-deployment.yaml
+      - echo Deploying Kubernetes resources...
       - kubectl apply -f k8s/rendered-deployment.yaml
-      - kubectl apply -f k8s/service.yaml
-
-      - echo Checking for LoadBalancer External IP...
-      - >
-        for i in {1..30}; do
-          EXTERNAL_IP=$(kubectl get svc apache-webserver \
-                         -o jsonpath='{.status.loadBalancer.ingress[0].hostname}');
-          if [ -n "$EXTERNAL_IP" ]; then
-            echo "✅ App is at http://$EXTERNAL_IP";
-            break;
-          fi;
-          echo "⏳ Waiting for external IP... ($i/30)";
-          sleep 10;
-        done
-
-artifacts:
-  files:
-    - imagedefinitions.json
