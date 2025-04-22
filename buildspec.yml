@@ -2,9 +2,9 @@ version: 0.2
 
 env:
   variables:
-    EKS_CLUSTER_NAME: todo-eks-cluster
+    EKS_CLUSTER_NAME: sample-webserver-eks-cluster
     ECR_REGISTRY: 746413500084.dkr.ecr.us-east-1.amazonaws.com
-    REPO_NAME: todo-app-repo
+    REPO_NAME: sample-webserver-repo
     AWS_DEFAULT_REGION: us-east-1
 
 phases:
@@ -12,35 +12,32 @@ phases:
     commands:
       - echo Logging in to Amazon ECR...
       - aws --version
-      - echo Logging in with credentials...
+      - echo Authenticating with ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
       - "export IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)"
+
   build:
     commands:
       - echo Building Docker image...
       - docker build -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG .
-      - echo Pushing Docker image...
+      - echo Pushing Docker image to ECR...
       - docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
+
   post_build:
     commands:
-      - echo Writing imagedefinitions.json for CodeDeploy...
-      - printf '[{"name":"f2p-backend","imageUri":"%s"}]' $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG > imagedefinitions.json
-      - echo Updating kubeconfig for EKS cluster...
+      - echo Updating kubeconfig for EKS...
       - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
-      - echo Rendering and previewing deployment.yaml...
-      - "sed \"s|IMAGE_URI|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g\" k8s/deployment.yaml > k8s/rendered-deployment.yaml"
-      - echo "--- Rendered deployment.yaml ---"
-      - cat k8s/rendered-deployment.yaml
-      - echo "--- End of rendered deployment.yaml ---"
-      - echo Deploying Kubernetes resources...
+      - echo Replacing image URI in deployment.yaml...
+      - "sed \"s|<image>|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g\" k8s/deployment.yaml > k8s/rendered-deployment.yaml"
+      - echo Applying Kubernetes manifests...
       - kubectl apply -f k8s/rendered-deployment.yaml
       - kubectl apply -f k8s/service.yaml
-      - echo Waiting for LoadBalancer External IP...
+      - echo Checking for LoadBalancer External IP...
       - |
         for i in {1..30}; do
-          EXTERNAL_IP=$(kubectl get svc f2p-backend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          EXTERNAL_IP=$(kubectl get svc webserver-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
           if [[ -n "$EXTERNAL_IP" ]]; then
-            echo "Application is accessible at: http://$EXTERNAL_IP"
+            echo "App is available at: http://$EXTERNAL_IP"
             break
           fi
           echo "Waiting for external IP... ($i/30)"
