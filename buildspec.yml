@@ -14,7 +14,9 @@ phases:
       - aws --version
       - echo Authenticating with ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-      - "export IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)"
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - export IMAGE_TAG
+      - echo "Image tag is $IMAGE_TAG"
 
   build:
     commands:
@@ -29,11 +31,14 @@ phases:
       - export HOME=/root
       - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
       - echo Replacing image URI in deployment.yaml...
-      - "sed \"s|<image>|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g\" k8s/deployment.yaml > k8s/rendered-deployment.yaml"
+      - sed "s|<image>|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g" k8s/deployment.yaml > k8s/rendered-deployment.yaml
+      - echo "--- Rendered deployment.yaml ---"
+      - cat k8s/rendered-deployment.yaml || echo "Failed to render deployment.yaml!"
+      - echo "--- End of Rendered File ---"
       - echo Applying Kubernetes manifests...
       - kubectl apply -f k8s/rendered-deployment.yaml
       - kubectl apply -f k8s/service.yaml
-      - echo Checking for LoadBalancer External IP...
+      - echo Waiting for LoadBalancer External IP...
       - |
         for i in {1..30}; do
           EXTERNAL_IP=$(kubectl get svc webserver-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
