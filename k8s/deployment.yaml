@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: apache-webserver
-          image: IMAGE_URI  # <-- to be replaced dynamically in buildspec
+          image: 746413500084.dkr.ecr.us-east-1.amazonaws.com/sample-webserver-repo:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
