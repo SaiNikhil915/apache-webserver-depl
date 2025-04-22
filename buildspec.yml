@@ -26,6 +26,7 @@ phases:
   post_build:
     commands:
       - echo Updating kubeconfig for EKS...
+      - export HOME=/root
       - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
       - echo Replacing image URI in deployment.yaml...
       - "sed \"s|<image>|$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG|g\" k8s/deployment.yaml > k8s/rendered-deployment.yaml"
