@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: apache-webserver
-          image: <image>
+          image: IMAGE_URI
           imagePullPolicy: Always
           ports:
             - containerPort: 80
